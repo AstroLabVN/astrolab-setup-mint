@@ -40,6 +40,19 @@ check_root() {
   fi
 }
 
+### Grant passwordless sudo to SSH_USER ####################################
+configure_passwordless_sudo() {
+  log_info "Configuring passwordless sudo for ${SSH_USER}…"
+
+  # Create a sudoers snippet
+  cat > "/etc/sudoers.d/${SSH_USER}" <<EOF
+${SSH_USER} ALL=(ALL) NOPASSWD:ALL
+EOF
+
+  # Secure it
+  chmod 0440 "/etc/sudoers.d/${SSH_USER}"
+}
+
 ### Install & start SSH server ################################
 install_and_enable_ssh() {
   if ! command -v sshd &>/dev/null; then
@@ -135,6 +148,7 @@ restart_network_manager() {
 ### Main ######################################################
 main() {
   check_root
+  configure_passwordless_sudo
   install_and_enable_ssh
   install_and_enable_nm
   add_ssh_key
