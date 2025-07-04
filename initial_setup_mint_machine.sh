@@ -7,6 +7,17 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
+#------------------------------------------------------------------------------
+# Error trapping: print failing line and command
+#------------------------------------------------------------------------------
+error_handler() {
+  local lineno=$1 cmd=$2
+  log_error "Script failed at line ${lineno}: '${cmd}'"
+  exit 1
+}
+trap 'error_handler ${LINENO} "${BASH_COMMAND}"' ERR
+
+
 ### Configuration Variables (override via env if desired) ###
 SSH_PORT="${SSH_PORT:-22}"
 INTERFACE="${INTERFACE:-wlp3s0}"
