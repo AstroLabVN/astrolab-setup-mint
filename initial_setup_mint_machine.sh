@@ -9,13 +9,13 @@ IFS=$'\n\t'
 
 ### Configuration Variables (override via env if desired) ###
 SSH_PORT="${SSH_PORT:-22}"
-INTERFACE="${INTERFACE:-enp0s3}"
+INTERFACE="${INTERFACE:-wlp3s0}"
 FIXED_IP="${FIXED_IP:-192.168.1.211/24}"
 GATEWAY="${GATEWAY:-192.168.1.1}"
 DNS_SERVERS="${DNS_SERVERS:-8.8.8.8,8.8.4.4}"
 # Specify user to receive the SSH key, and the public key itself
 SSH_USER="${SSH_USER:-bgi}"
-SSH_PUB_KEY="${SSH_PUB_KEY:ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDkHuZf/8XF6feS+fOHRQeVN/Q3thJFdIDt/UXgQQdkG astrolab_admin}"
+SSH_PUB_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDkHuZf/8XF6feS+fOHRQeVN/Q3thJFdIDt/UXgQQdkG astrolab_admin"
 
 ### Logging helpers #########################################
 log_info()  { printf "[INFO]  %s\n" "$*"; }
@@ -42,6 +42,21 @@ install_and_enable_ssh() {
   log_info "Enabling and starting ssh service…"
   systemctl enable ssh
   systemctl start  ssh
+}
+
+### Install & ensure NetworkManager ###########################
+install_and_enable_nm() {
+  if ! command -v nmcli &>/dev/null; then
+    log_info "Installing NetworkManager…"
+    apt update
+    apt install -y --no-install-recommends network-manager
+  else
+    log_info "NetworkManager already installed."
+  fi
+
+  log_info "Enabling and starting NetworkManager service…"
+  systemctl enable NetworkManager
+  systemctl start  NetworkManager
 }
 
 ### Add provided public SSH key to the specified user  ########
@@ -102,14 +117,15 @@ configure_static_ip() {
 
 ### Restart NetworkManager service ############################
 restart_network_manager() {
-  log_info "Restarting NetworkManager…"
-  systemctl restart network-manager
+  log_info "Restarting NetworkManager service…"
+  systemctl restart NetworkManager
 }
 
 ### Main ######################################################
 main() {
   check_root
   install_and_enable_ssh
+  install_and_enable_nm
   add_ssh_key
   open_ssh_port
   configure_static_ip
