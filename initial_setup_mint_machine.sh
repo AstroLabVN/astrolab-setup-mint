@@ -20,12 +20,13 @@ trap 'error_handler ${LINENO} "${BASH_COMMAND}"' ERR
 
 ### Configuration Variables (override via env if desired) ###
 readonly SSH_PORT="${SSH_PORT:-22}"
-readonly INTERFACE="${INTERFACE:-wlp3s0}"
-# Default includes mask; we'll extract the mask for interactive static-IP prompt
+# default interface if not set in env or by prompt
+INTERFACE="${INTERFACE:-wlp3s0}"
 readonly DEFAULT_FIXED_IP="${FIXED_IP:-192.168.1.210/24}"
 readonly GATEWAY="${GATEWAY:-192.168.1.1}"
 readonly DNS_SERVERS="${DNS_SERVERS:-8.8.8.8,8.8.4.4}"
 readonly SSH_PUB_KEY="${SSH_PUB_KEY:-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDkHuZf/8XF6feS+fOHRQeVN/Q3thJFdIDt/UXgQQdkG astrolab_admin}"
+readonly SSH_USER="${SSH_USER:-bgi}"
 
 ### Logging helpers #########################################
 log_info()  { printf '[INFO]  %s\n' "$*"; }
@@ -38,22 +39,26 @@ check_root() {
   fi
 }
 
+### Prompt for the network interface ########################
+prompt_interface() {
+  read -r -p "Enter network interface to configure [${INTERFACE}]: " iface
+  if [[ -n "$iface" ]]; then
+    INTERFACE="$iface"
+  fi
+  log_info "Using interface: ${INTERFACE}"
+}
+
 ### Prompt for passwords #####################################
 prompt_set_passwords() {
-  # Determine the “real” user if run under sudo
   local user="${SUDO_USER:-$(whoami)}"
-
   log_info "Set password for user '${user}':"
   passwd "${user}"
-
   log_info "Set password for root:"
   passwd root
 }
 
 ### Prompt and (optionally) configure static IP #############
 prompt_and_configure_static_ip() {
-  # Ask whether to do static IP
-  local response
   read -r -p "Configure static IP on ${INTERFACE}? [y/N] " response
   if [[ "${response}" =~ ^[Yy]$ ]]; then
     local addr mask
@@ -68,7 +73,7 @@ prompt_and_configure_static_ip() {
 
 ### Grant passwordless sudo to SSH_USER ####################################
 configure_passwordless_sudo() {
-  log_info "Configuring passwordless sudo for ${SSH_USER:-bgi}…"
+  log_info "Configuring passwordless sudo for ${SSH_USER}…"
   cat > "/etc/sudoers.d/${SSH_USER}" <<EOF
 ${SSH_USER} ALL=(ALL) NOPASSWD:ALL
 EOF
@@ -103,23 +108,22 @@ install_and_enable_nm() {
 
 ### Add provided public SSH key to the specified user  ########
 add_ssh_key() {
-  local user="${SSH_USER:-bgi}"
   if [[ -z "${SSH_PUB_KEY}" ]]; then
     log_info "No public SSH key provided; skipping."
     return
   fi
-  if ! id "${user}" &>/dev/null; then
-    die "User '${user}' does not exist."
+  if ! id "${SSH_USER}" &>/dev/null; then
+    die "User '${SSH_USER}' does not exist."
   fi
   local ssh_dir
-  ssh_dir=$(eval echo "~${user}/.ssh")
+  ssh_dir=$(eval echo "~${SSH_USER}/.ssh")
 
   log_info "Creating ${ssh_dir} and installing key…"
   mkdir -p "${ssh_dir}"
   chmod 700 "${ssh_dir}"
   printf '%s\n' "${SSH_PUB_KEY}" > "${ssh_dir}/authorized_keys"
   chmod 600 "${ssh_dir}/authorized_keys"
-  chown -R "${user}:${user}" "${ssh_dir}"
+  chown -R "${SSH_USER}:${SSH_USER}" "${ssh_dir}"
 }
 
 ### Open SSH port in UFW (if present) ########################
@@ -160,6 +164,7 @@ restart_network_manager() {
 ### Main ######################################################
 main() {
   check_root
+  prompt_interface
   prompt_set_passwords
   prompt_and_configure_static_ip
   configure_passwordless_sudo
